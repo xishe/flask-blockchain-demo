@@ -1,48 +1,85 @@
-{% extends "base.html" %} {% block content %}
-<form action="{{ url_for('index') }}" method="POST">
-    <div class="form-group">
-        <label for="text">Данные</label>
-        <input type="text" class="form-control" id="text" placeholder="Поместите сюда свои данные" name="text"
-            value="{{ request.form.get('text', '') }}" required>
-    </div>
+{% extends "base.html" %}
 
-    <div class="form-check">
-        <label class="form-check-label">
-            <input type="checkbox" class="form-check-input" name="make_proof">
-            с POW
-        </label>
-    </div>
-    <br>
-    <button type="submit" class="btn btn-primary btn-lg btn-block">Записать</button>
-</form>
-<br>
-<hr> {% endblock %} {% block check %}
-<form action="{{ url_for('integrity') }}" method="POST">
-    <button type="submit" class="btn btn-primary btn-lg btn-block">Проверка целостности</button>
-</form>
-<hr>
-<ul class="list-group">
-    {% for result in results %}
-    <li class="list-group-item"> Block {{result['block'] }} : {% if result['result'] == 'ok' %}
-        <i>Okey!</i> {% endif %} {% if result['result'] == 'error' %}
-        <strong> поврежденный!</strong> {% endif %} {% if result['proof'] != -1 %}
-        <i>it is mined!</i> {% endif %} {% if result['proof'] == -1 %}
-        <strong>it is not mined!</strong> {% endif %}
+{% block content %}
+{% if error or storage_error %}
+<div class="alert alert-error" role="alert">{{ error or storage_error }}</div>
+{% endif %}
+{% if mining_message %}
+<div class="alert alert-success" role="status"><strong>Майнинг.</strong> {{ mining_message }}</div>
+{% endif %}
 
-    </li>
+{% if not storage_error %}
+<section class="card" aria-labelledby="add-block-title">
+    <h2 id="add-block-title" class="card-title">Добавить блок</h2>
+    <form action="{{ url_for('index') }}" method="post">
+        <div class="form-group">
+            <label for="text">Данные блока</label>
+            <input type="text" class="form-control" id="text" name="text"
+                   value="{{ draft_text | default('') }}" required maxlength="{{ max_text_length }}">
+        </div>
+        <div class="form-check">
+            <input type="checkbox" id="make_proof" name="make_proof">
+            <label for="make_proof" class="form-check-label">Вычислить доказательство работы сразу</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Добавить блок</button>
+    </form>
+</section>
+
+<section class="card" aria-labelledby="integrity-title">
+    <h2 id="integrity-title" class="card-title">Проверка целостности</h2>
+    <form action="{{ url_for('integrity') }}" method="post">
+        <button type="submit" class="btn btn-primary">Проверить цепочку</button>
+    </form>
+
+    {% if results is defined %}
+    {% if results | selectattr('result', 'eq', 'error') | list %}
+    <div class="alert alert-error" role="alert">Цепочка повреждена.</div>
+    <ul class="list-group">
+        {% for result in results if result.result == 'error' %}
+        <li class="list-group-item">
+            <strong>Блок {{ result.block }}.</strong> {{ result.reasons | join(' ') }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="alert alert-success" role="status">Целостность подтверждена.</div>
+    {% endif %}
+    {% endif %}
+</section>
+
+<section class="card" aria-labelledby="mining-title">
+    <h2 id="mining-title" class="card-title">Майнинг</h2>
+    <form action="{{ url_for('mining') }}" method="post">
+        <button type="submit" class="btn btn-primary">Обработать ожидающие блоки</button>
+    </form>
+</section>
+
+<section class="card" aria-labelledby="chain-title">
+    <h2 id="chain-title" class="card-title">
+        Цепочка блоков <span class="badge badge-secondary">{{ chain | length }}</span>
+    </h2>
+    {% for block in chain %}
+    <article class="chain-block">
+        <div class="chain-block-header">
+            <strong>Блок №{{ block.index }}</strong>
+            {% if block.index == 1 %}
+            <span class="badge badge-secondary">Начальный блок</span>
+            {% elif block.is_mined %}
+            <span class="badge badge-success">Доказательство · nonce {{ block.nonce }}</span>
+            {% else %}
+            <span class="badge badge-warning">Ожидает майнинга</span>
+            {% endif %}
+        </div>
+        <div class="chain-block-data">{{ block.text }}</div>
+        <p class="hash-label">{{ block.timestamp | block_time }}</p>
+        <p class="hash-label">Хеш содержимого</p>
+        <code class="hash-value">{{ block.content_hash }}</code>
+        <p class="hash-label">Хеш предыдущего блока</p>
+        <code class="hash-value">{{ block.prev_hash }}</code>
+    </article>
+    {% else %}
+    <p>Начальный блок отсутствует.</p>
     {% endfor %}
-</ul>
-<br> {% endblock %}
-<hr> {% block mining %}
-<form action="{{ url_for('mining') }}" method="POST">
-    <button type="submit" class="btn btn-primary btn-lg btn-block">Mine</button>
-</form>
-{% if querry %}
-<hr>
-<div class="alert alert-success" role="alert">
-    <strong>Отличная работа!</strong> Вы успешно записали!
-</div>
-<hr><br> {% endif %}
-
-
-<br><br><br> {% endblock %}
+</section>
+{% endif %}
+{% endblock %}
